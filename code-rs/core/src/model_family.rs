@@ -336,6 +336,15 @@ pub fn find_family_for_model(slug: &str) -> Option<ModelFamily> {
             max_output_tokens: Some(MAX_OUTPUT_DEFAULT),
             truncation_policy: TruncationPolicy::Bytes(10_000),
         )
+    } else if slug.to_lowercase().starts_with("glm") {
+        model_family!(
+            slug, "glm",
+            supports_reasoning_summaries: false,
+            base_instructions: BASE_INSTRUCTIONS.to_string(),
+            context_window: Some(CONTEXT_WINDOW_200K),
+            max_output_tokens: Some(CONTEXT_WINDOW_128K),
+            truncation_policy: TruncationPolicy::Bytes(10_000),
+        )
     } else {
         None
     }
