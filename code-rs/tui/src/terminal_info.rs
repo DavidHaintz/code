@@ -37,7 +37,7 @@ pub struct TerminalBackgroundDetection {
     pub rgb: Option<(u8, u8, u8)>,
 }
 
-fn set_nonblocking(tty: &std::fs::File) {
+fn set_nonblocking(_tty: &std::fs::File) {
     #[cfg(unix)]
     {
         use std::os::unix::io::AsRawFd;

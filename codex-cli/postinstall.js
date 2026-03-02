@@ -97,9 +97,9 @@ function isPathOnWindowsFs(p) {
   } catch { return false; }
 }
 
-async function writeCacheAtomic(srcPath, cachePath) {
+async function writeCacheAtomic(srcPath, cachePath, force = false) {
   try {
-    if (existsSync(cachePath)) {
+    if (existsSync(cachePath) && !force) {
       const ok = validateDownloadedBinary(cachePath).ok;
       if (ok) return;
     }
@@ -344,19 +344,89 @@ export async function runPostinstall(options = {}) {
   const binaries = ['code'];
   
   console.log(`Installing @just-every/code v${version} for ${targetTriple}...`);
-  
+
+  // Detect local development build: check if we're installing from source repo
+  // Use process.cwd() which captures the original working dir during "npm install -g ."
+  const tryLocalBuild = (() => {
+    try {
+      // First, check for explicit environment variable (most reliable)
+      if (process.env.CODE_LOCAL_BUILD && existsSync(process.env.CODE_LOCAL_BUILD)) {
+        const valid = validateDownloadedBinary(process.env.CODE_LOCAL_BUILD);
+        if (valid.ok) {
+          console.log(`✓ Using local build from CODE_LOCAL_BUILD: ${process.env.CODE_LOCAL_BUILD}`);
+          return process.env.CODE_LOCAL_BUILD;
+        }
+      }
+
+      // process.cwd() is the directory where "npm install" was run (codex-cli)
+      const cwdDir = process.cwd();
+
+      // Check if we're in codex-cli within the monorepo by looking for ../code-rs
+      // Try both relative to cwd and relative to __dirname (for edge cases)
+      const possibleRoots = [
+        resolve(cwdDir, '..'),           // cwd/../ (likely repo root if cwd is codex-cli)
+        resolve(__dirname, '..', '..'),  // installed location/../..
+      ];
+
+      for (const repoRoot of possibleRoots) {
+        const rustBuildDir = join(repoRoot, 'code-rs', 'target', 'dev-fast');
+        const rustReleaseDir = join(repoRoot, 'code-rs', 'target', 'release');
+
+        // Determine the local binary name based on platform
+        const localBinaryName = isWindows ? 'code-tui.exe' : 'code-tui';
+
+        // Check dev-fast first, then release
+        for (const dir of [rustBuildDir, rustReleaseDir]) {
+          if (existsSync(dir)) {
+            const localBinary = join(dir, localBinaryName);
+            if (existsSync(localBinary)) {
+              const valid = validateDownloadedBinary(localBinary);
+              if (valid.ok) {
+                console.log(`✓ Using local build: ${localBinary}`);
+                return localBinary;
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignore errors, fall through to normal install
+    }
+    return null;
+  })();
+
   for (const binary of binaries) {
     const binaryName = `${binary}-${targetTriple}${binaryExt}`;
     const localPath = join(binDir, binaryName);
     const cachePath = getCachedBinaryPath(version, targetTriple, isWindows);
-    
+
     // On Windows we avoid placing the executable inside node_modules to prevent
     // EBUSY/EPERM during global upgrades when the binary is in use.
     // We treat the user cache path as the canonical home of the native binary.
     // For macOS/Linux we keep previous behavior and also place a copy in binDir
     // for convenience.
 
-    // Fast path: if a valid cached binary exists for this version+triple, reuse it.
+    // PRIORITY 1: Local development build (when CODE_LOCAL_BUILD is set)
+    // This takes precedence over cache to ensure dev changes are used
+    if (tryLocalBuild) {
+      const wsl = isWSL();
+      const binDirReal = (() => { try { return realpathSync(binDir); } catch { return binDir; } })();
+      const mirrorToLocal = !(isWindows || (wsl && isPathOnWindowsFs(binDirReal)));
+
+      // Cache the local build (overwrite existing cache)
+      try { unlinkSync(cachePath); } catch {}
+      await writeCacheAtomic(tryLocalBuild, cachePath, true);
+
+      // Mirror into local bin on Unix-like filesystems
+      if (mirrorToLocal) {
+        copyFileSync(tryLocalBuild, localPath);
+        try { chmodSync(localPath, 0o755); } catch {}
+      }
+      console.log(`✓ ${binaryName} installed from local build`);
+      continue; // next binary
+    }
+
+    // PRIORITY 2: Fast path - if a valid cached binary exists, reuse it.
     try {
       if (existsSync(cachePath)) {
         const valid = validateDownloadedBinary(cachePath);
@@ -376,8 +446,8 @@ export async function runPostinstall(options = {}) {
     } catch {
       // Ignore cache errors and fall through to normal paths
     }
-    
-    // First try platform package via npm optionalDependencies (fast path on npm CDN).
+
+    // PRIORITY 3: Platform package via npm optionalDependencies (fast path on npm CDN).
     const require = createRequire(import.meta.url);
     const platformPkg = (() => {
       const name = (() => {

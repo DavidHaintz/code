@@ -4,6 +4,8 @@
 
 **Every Code** (Code for short) is a fast, local coding agent for your terminal. It's a community-driven fork of `openai/codex` focused on real developer ergonomics: Browser integration, multi-agents, theming, and reasoning control — all while staying compatible with upstream.
 
+> **Note**: This fork is optimized for [z.ai (GLM)](https://z.ai) integration, providing enhanced support for GLM models and workflows.
+
 &ensp;
 ## What's new
 
@@ -77,20 +79,61 @@
 &ensp;
 ## Quickstart
 
-### Run
+### Prerequisites
+
+Before installing from source, ensure you have:
+
+- **Node.js** (v16 or later)
+- **Rust** with cargo ([install via rustup](https://rustup.rs))
+- **Build tools**:
+  - **Windows**: [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with "Desktop development with C++" workload
+  - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
+  - **Linux**: `build-essential` package
+
+### Install from Source
+
+**Quick install** (run from repository root):
+
+- **Windows**: `install.bat`
+- **macOS/Linux**: `./install.sh`
+
+**Manual install** (from repository root):
 
 ```bash
-npx -y @just-every/code
-```
+# Build the Rust binary first
+ cd code-rs
+ cargo build --package code-tui --profile dev-fast
+ cd ..
 
-### Install & Run
+ # Install the CLI globally (uses the local build via CODE_LOCAL_BUILD)
+ cd codex-cli
+ CODE_LOCAL_BUILD="../code-rs/target/dev-fast/code-tui.exe" npm install -g .
+ ```
+
+### Update from Source
+
+**Quick update** (run from repository root):
+
+- **Windows**: `update.bat`
+- **macOS/Linux**: `./update.sh`
+
+**Manual update** (from repository root):
 
 ```bash
-npm install -g @just-every/code
-code // or `coder` if you're using VS Code
-```
+# Pull latest changes
+ git pull
 
-Note: If another tool already provides a `code` command (e.g. VS Code), our CLI is also installed as `coder`. Use `coder` to avoid conflicts.
+ # Rebuild the Rust binary
+ cd code-rs
+ cargo build --package code-tui --profile dev-fast
+ cd ..
+
+ # Reinstall the CLI (use --force to overwrite existing)
+ cd codex-cli
+ CODE_LOCAL_BUILD="../code-rs/target/dev-fast/code-tui.exe" npm install -g --force .
+ ```
+
+After installation, run `code` (or `coder` if you have VS Code installed which also provides a `code` command).
 
 **Authenticate** (one of the following):
 - **Sign in with ChatGPT** (Plus/Pro/Team; uses models available to your plan)

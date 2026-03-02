@@ -199,8 +199,8 @@ pub async fn process_exec_tool_call(
             #[allow(unused_mut)]
             let mut timed_out = raw_output.timed_out;
 
-            #[allow(unused_variables)]
-            let mut exit_signal: Option<i32> = None;
+            #[allow(unused_mut)]
+            let exit_signal: Option<i32> = None;
 
             #[cfg(target_family = "unix")]
             {
